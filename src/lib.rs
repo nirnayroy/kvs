@@ -172,6 +172,8 @@ impl KvStore {
                     let value_slice = &value[1..value.len()-1];
 
                     if key_slice == target {
+                        let key = &log_dict["value"]["key"].to_string();
+                        let key_slice = &key[1..key.len()-1];
                         // println!("here {}", log_dict["value"]["key"]);
                         self.dict.insert(key_slice.to_string(), value_slice.to_string());
                         // println!("{}", self.dict.get("key1").unwrap());
@@ -183,7 +185,9 @@ impl KvStore {
                     }
                 },
                 "rm" => {
-                    self.dict.remove(&log_dict["value"]["key"].to_string());
+                    let key = &log_dict["value"]["key"].to_string();
+                    let key_slice = &key[1..key.len()-1];
+                    self.dict.remove(&key_slice.to_string());
                     self.recreate_state_from_log((log_dict["previous"].to_string().parse::<u64>().unwrap()+2).to_string(), target);
                     return Ok(())
                 },
@@ -201,18 +205,26 @@ impl KvStore {
         // let value = self.store.get(&key).map(|s| s.to_string()).unwrap();
         // print!("{:?}", &*self.path);
 
-        let current_log = self.log.load(&*self.path).unwrap();
-        self.max_log = current_log.current;
+        self.log = self.log.load(&*self.path).unwrap();
+        self.max_log = self.log.current;
         // println!("max log {}", self.max_log.clone());
         // println!("path {}", self.path.display());
         self.recreate_state_from_log("2".to_string(), &key)?;
+        self.log.append(("get".to_string(), json!(
+            {
+                "key": key,
+            })
+        ), &*self.path);
+        
         
         if self.dict.get(&key).map(|s| s.to_string()).is_some(){
             println!("{}", self.dict.get(&key).map(|s| s.to_string()).unwrap());
             Ok(self.dict.get(&key).map(|s| s.to_string()))
         } else {
+            println!("Key not found");
             Err(DBError::no_key())
         }
+
         // unimplemented!("unimplemented")
     }
     pub fn set(&mut self, key: String, value: String) -> Result<Option<String>, DBError> {
@@ -228,13 +240,15 @@ impl KvStore {
         // let file = std::fs::File::open(self.path).map_err(|err| DBError::from_io(err))?;
         // let file = std::io::BufWriter::new(file);
         // serde_json::to_writer(file, &dict).map_err(|err| DBError::from_serialization(err))?;
+        self.log = self.log.load(&*self.path).unwrap();
+        self.max_log = self.log.current;
         self.log.append(("set".to_string(), json!(
         {
             "key": key,
             "value": value,
         })
     ), &*self.path);
-        self.max_log += 1;
+        
         Ok(Some("".to_string()))
     }
 
@@ -244,6 +258,17 @@ impl KvStore {
         // let file = std::fs::File::open(temp_dir).map_err(|err| DBError::from_io(err))?;
         // let file = std::io::BufWriter::new(file);
         // serde_json::to_writer(file, &self.store).map_err(|err| DBError::from_serialization(err))?;
+        // Ok(Some("".to_string()))
+        self.log = self.log.load(&*self.path).unwrap();
+        self.max_log = self.log.current;
+        // println!("max log {}", self.max_log.clone());
+        // println!("path {}", self.path.display());
+        self.recreate_state_from_log("2".to_string(), &key)?;
+        self.log.append(("rm".to_string(), json!(
+            {
+                "key": key,
+            })
+        ), &*self.path);
         Ok(Some("".to_string()))
     }
 

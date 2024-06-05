@@ -34,7 +34,6 @@ enum Commands {
     Set {
         key: String,
         value: String,
-        //     is_true: bool
     },
     #[command(about = "remove value")]
     Rm { key: String },
