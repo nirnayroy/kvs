@@ -139,26 +139,23 @@ impl KvStore {
                     let key = &log_dict["value"]["key"].to_string();
                     let key_slice = &key[1..key.len() - 1];
 
-                    let value: &String = &log_dict["value"]["value"].to_string();
-                    let value_slice = &value[1..value.len() - 1];
+                    // let value: &String = &log_dict["value"]["value"].to_string();
+                    // let value_slice = &value[1..value.len() - 1];
 
                     if key_slice == target {
-                        let key = &log_dict["value"]["key"].to_string();
-                        let key_slice = &key[1..key.len() - 1];
+                        // let key = &log_dict["value"]["key"].to_string();
+                        // let key_slice = &key[1..key.len() - 1];
                         // println!("here {}", log_dict["value"]["key"]);
-                        self.dict
-                            .insert(key_slice.to_string(), value_slice.to_string());
+                        self.dict.insert(key_slice.to_string(), uid.clone());
                         // println!("{}", self.dict.get("key1").unwrap());
                         let _ = self.recreate_state_from_log(
-                            (log_dict["previous"].to_string().parse::<u64>().unwrap() + 2)
-                                .to_string(),
+                            (uid.parse::<u64>().unwrap() + 1).to_string(),
                             target,
                         );
                         Ok(())
                     } else {
                         let _ = self.recreate_state_from_log(
-                            (log_dict["previous"].to_string().parse::<u64>().unwrap() + 2)
-                                .to_string(),
+                            (uid.parse::<u64>().unwrap() + 1).to_string(),
                             target,
                         );
                         Ok(())
@@ -169,14 +166,14 @@ impl KvStore {
                     let key_slice = &key[1..key.len() - 1];
                     self.dict.remove(&key_slice.to_string());
                     let _ = self.recreate_state_from_log(
-                        (log_dict["previous"].to_string().parse::<u64>().unwrap() + 2).to_string(),
+                        (uid.parse::<u64>().unwrap() + 1).to_string(),
                         target,
                     );
                     Ok(())
                 }
                 "get" => {
                     let _ = self.recreate_state_from_log(
-                        (log_dict["previous"].to_string().parse::<u64>().unwrap() + 2).to_string(),
+                        (uid.parse::<u64>().unwrap() + 1).to_string(),
                         target,
                     );
                     Ok(())
@@ -202,8 +199,12 @@ impl KvStore {
         );
 
         if self.dict.get(&key).map(|s| s.to_string()).is_some() {
-            println!("{}", self.dict.get(&key).map(|s| s.to_string()).unwrap());
-            Ok(self.dict.get(&key).map(|s| s.to_string()))
+            let log_pointer = self.dict.get(&key).map(|s| s.to_string()).unwrap();
+            let log_dict = Log::read_log_dict(&log_pointer, &self.path);
+            let value: &String = &log_dict["value"]["value"].to_string();
+            let value_slice = &value[1..value.len() - 1];
+            println!("{}", value_slice);
+            Ok(Some(value_slice.to_string()))
         } else {
             println!("Key not found");
             Ok(None)
@@ -230,8 +231,6 @@ impl KvStore {
     pub fn remove(&mut self, key: String) -> Result<Option<String>, DBError> {
         self.log = self.log.load(&self.path).unwrap();
         self.max_log = self.log.current;
-        // println!("max log {}", self.max_log.clone());
-        // println!("path {}", self.path.display());
         self.recreate_state_from_log("2".to_string(), &key)?;
         self.log.append(
             (
