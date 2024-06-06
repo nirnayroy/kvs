@@ -1,5 +1,5 @@
 use assert_cmd::prelude::*;
-use kvs::{KvStore, DBError};
+use kvs::{DBError, KvStore};
 use predicates::ord::eq;
 use predicates::str::{contains, is_empty, PredicateStrExt};
 use std::process::Command;
@@ -17,7 +17,7 @@ fn cli_no_args() {
 fn cli_version() {
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["-V"])
+        .args(["-V"])
         .assert()
         .stdout(contains(env!("CARGO_PKG_VERSION")));
 }
@@ -28,7 +28,7 @@ fn cli_get_non_existent_key() {
     let temp_dir = TempDir::new().unwrap();
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["get", "key1"])
+        .args(["get", "key1"])
         .current_dir(&temp_dir)
         .assert()
         .success()
@@ -41,7 +41,7 @@ fn cli_rm_non_existent_key() {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["rm", "key1"])
+        .args(["rm", "key1"])
         .current_dir(&temp_dir)
         .assert()
         .failure()
@@ -54,7 +54,7 @@ fn cli_set() {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["set", "key1", "value1"])
+        .args(["set", "key1", "value1"])
         .current_dir(&temp_dir)
         .assert()
         .success()
@@ -72,7 +72,7 @@ fn cli_get_stored() -> Result<(), DBError> {
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["get", "key1"])
+        .args(["get", "key1"])
         .current_dir(&temp_dir)
         .assert()
         .success()
@@ -80,7 +80,7 @@ fn cli_get_stored() -> Result<(), DBError> {
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["get", "key2"])
+        .args(["get", "key2"])
         .current_dir(&temp_dir)
         .assert()
         .success()
@@ -91,7 +91,7 @@ fn cli_get_stored() -> Result<(), DBError> {
 
 // `kvs rm <KEY>` should print nothing and exit with zero.
 #[test]
-fn cli_rm_stored() -> Result<(), DBError>  {
+fn cli_rm_stored() -> Result<(), DBError> {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
 
     let mut store = KvStore::open(temp_dir.path())?;
@@ -100,7 +100,7 @@ fn cli_rm_stored() -> Result<(), DBError>  {
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["rm", "key1"])
+        .args(["rm", "key1"])
         .current_dir(&temp_dir)
         .assert()
         .success()
@@ -108,7 +108,7 @@ fn cli_rm_stored() -> Result<(), DBError>  {
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["get", "key1"])
+        .args(["get", "key1"])
         .current_dir(&temp_dir)
         .assert()
         .success()
@@ -121,13 +121,13 @@ fn cli_rm_stored() -> Result<(), DBError>  {
 fn cli_invalid_get() {
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["get"])
+        .args(["get"])
         .assert()
         .failure();
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["get", "extra", "field"])
+        .args(["get", "extra", "field"])
         .assert()
         .failure();
 }
@@ -136,19 +136,19 @@ fn cli_invalid_get() {
 fn cli_invalid_set() {
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["set"])
+        .args(["set"])
         .assert()
         .failure();
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["set", "missing_field"])
+        .args(["set", "missing_field"])
         .assert()
         .failure();
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["set", "extra", "extra", "field"])
+        .args(["set", "extra", "extra", "field"])
         .assert()
         .failure();
 }
@@ -157,13 +157,13 @@ fn cli_invalid_set() {
 fn cli_invalid_rm() {
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["rm"])
+        .args(["rm"])
         .assert()
         .failure();
 
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["rm", "extra", "field"])
+        .args(["rm", "extra", "field"])
         .assert()
         .failure();
 }
@@ -172,14 +172,14 @@ fn cli_invalid_rm() {
 fn cli_invalid_subcommand() {
     Command::cargo_bin("kvs")
         .unwrap()
-        .args(&["unknown", "subcommand"])
+        .args(["unknown", "subcommand"])
         .assert()
         .failure();
 }
 
 // Should get previously stored value.
 #[test]
-fn get_stored_value() -> Result<(), DBError>  {
+fn get_stored_value() -> Result<(), DBError> {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(temp_dir.path())?;
 
@@ -200,7 +200,7 @@ fn get_stored_value() -> Result<(), DBError>  {
 
 // Should overwrite existent value.
 #[test]
-fn overwrite_value() -> Result<(), DBError>  {
+fn overwrite_value() -> Result<(), DBError> {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(temp_dir.path())?;
 
@@ -221,7 +221,7 @@ fn overwrite_value() -> Result<(), DBError>  {
 
 // Should get `None` when getting a non-existent key.
 #[test]
-fn get_non_existent_value() -> Result<(), DBError>  {
+fn get_non_existent_value() -> Result<(), DBError> {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(temp_dir.path())?;
 
@@ -237,7 +237,7 @@ fn get_non_existent_value() -> Result<(), DBError>  {
 }
 
 #[test]
-fn remove_non_existent_key() -> Result<(), DBError>  {
+fn remove_non_existent_key() -> Result<(), DBError> {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(temp_dir.path())?;
     assert!(store.remove("key1".to_owned()).is_err());
@@ -245,7 +245,7 @@ fn remove_non_existent_key() -> Result<(), DBError>  {
 }
 
 #[test]
-fn remove_key() -> Result<(), DBError>  {
+fn remove_key() -> Result<(), DBError> {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(temp_dir.path())?;
     store.set("key1".to_owned(), "value1".to_owned())?;
@@ -257,7 +257,7 @@ fn remove_key() -> Result<(), DBError>  {
 // Insert data until total size of the directory decreases.
 // Test data correctness after compaction.
 #[test]
-fn compaction() -> Result<(), DBError>  {
+fn compaction() -> Result<(), DBError> {
     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(temp_dir.path())?;
 

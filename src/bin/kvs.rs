@@ -1,8 +1,6 @@
 use clap::{Parser, Subcommand};
 use kvs::KvStore;
 use tempfile::TempDir;
-use std::io::{Read, Write};
-use serde_json::{json, Value};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -16,24 +14,19 @@ enum Commands {
     #[command(about = "get value")]
     Get { key: String },
     #[command(about = "set value")]
-    Set {
-        key: String,
-        value: String,
-    },
+    Set { key: String, value: String },
     #[command(about = "remove value")]
     Rm { key: String },
-
 }
 
 fn main() {
-    let temp_dir = TempDir::new().expect("unable to create temporary working directory");
+    let _temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(&std::env::current_dir().unwrap()).unwrap();
     let args = Args::parse();
 
-    match args.cmd {
+    let _ = match args.cmd {
         Commands::Get { key } => store.get(key.to_string()),
         Commands::Set { key, value } => store.set(key.to_string(), value.to_string()),
-        Commands::Rm { key } => store.remove(key.to_string()).map_err(|e| panic!()),
+        Commands::Rm { key } => store.remove(key.to_string()).map_err(|_e| panic!()),
     };
-
 }
