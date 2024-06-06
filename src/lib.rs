@@ -222,7 +222,7 @@ impl KvStore {
             Ok(self.dict.get(&key).map(|s| s.to_string()))
         } else {
             println!("Key not found");
-            Err(DBError::no_key())
+            Ok(None)
         }
 
         // unimplemented!("unimplemented")
@@ -248,7 +248,7 @@ impl KvStore {
             "value": value,
         })
     ), &*self.path);
-        
+        self.dict.insert((key.clone()).to_string(), value);
         Ok(Some("".to_string()))
     }
 
@@ -269,7 +269,15 @@ impl KvStore {
                 "key": key,
             })
         ), &*self.path);
-        Ok(Some("".to_string()))
+
+        if self.dict.remove(&(key.clone()).to_string()).is_none(){
+            println!("Key not found");
+            Err(DBError::no_key())
+            // panic!()
+        } else {
+            Ok(Some(key))
+        }
+        
     }
 
     pub fn open(path: &Path) -> Result<KvStore, DBError> {

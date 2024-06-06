@@ -58,7 +58,7 @@ fn main() {
     match args.cmd {
         Commands::Get { key } => store.get(key.to_string()),
         Commands::Set { key, value } => store.set(key.to_string(), value.to_string()),
-        Commands::Rm { key } => store.remove(key.to_string()),
+        Commands::Rm { key } => store.remove(key.to_string()).map_err(|e| panic!()),
     };
 
     // let temp_dir = TempDir::new().expect("unable to create temporary working directory");
