@@ -1,5 +1,5 @@
 use assert_cmd::prelude::*;
-use kvs::{DBError, KvStore};
+use kvs::{errors::DBError, KvStore};
 use predicates::ord::eq;
 use predicates::str::{contains, is_empty, PredicateStrExt};
 use std::process::Command;

@@ -1,121 +1,18 @@
 use serde_json::{self, json, Value};
-use std::fs;
-use std::fs::File;
+
 use std::io;
 use std::io::{Read, Write};
-use std::{collections::HashMap, path::Path};
-
-#[derive(Debug)]
-pub enum DBError {
-    Serialize(serde_json::Error),
-    Io(io::Error),
-    Log,
-    NoKey,
-}
-
-impl DBError {
-    fn from_log_read() -> DBError {
-        DBError::Log
-    }
-
-    fn no_key() -> DBError {
-        DBError::NoKey
-    }
-}
-
-#[derive(Debug)]
-pub struct Log {
-    current: u64,
-    previous: u64,
-    value: Value,
-}
-
-impl Default for Log {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Log {
-    pub fn new() -> Log {
-        Log {
-            current: 1,
-            previous: 0,
-            value: json!(0),
-        }
-    }
-
-    pub fn append(&mut self, entry: (String, Value), path: &Path) {
-        self.previous = self.current;
-        self.current += 1;
-        self.value = self.create_entry(entry);
-        self.write(path);
-    }
-
-    fn write(&self, path: &Path) {
-        let mut file =
-            File::create(path.join(self.current.to_string())).expect("Could not create file!");
-        file.write_all(self.value.to_string().as_bytes())
-            .expect("Cannot write to the file!");
-    }
-
-    fn create_entry(&self, args_list: (String, Value)) -> Value {
-        json!({
-            "previous": self.previous,
-            "command": args_list.0,
-            "value": args_list.1,
-        })
-    }
-
-    fn find_highest_numbered_file(&self, path: &Path) -> io::Result<Option<String>> {
-        let mut highest_number: Option<u64> = None;
-        let mut highest_file_name: Option<String> = None;
-
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() {
-                if let Some(file_name) = path.file_name().and_then(|name| name.to_str()) {
-                    if let Ok(number) = file_name.parse::<u64>() {
-                        if highest_number.is_none() || number > highest_number.unwrap() {
-                            highest_number = Some(number);
-                            highest_file_name = Some(file_name.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(highest_file_name)
-    }
-    pub fn load(&self, path: &Path) -> Result<Log, crate::io::Error> {
-        let unique_id = self.find_highest_numbered_file(path)?;
-        match unique_id {
-            None => Ok(Log::new()),
-            Some(unique_id) => {
-                Log::get_log_from_dict(&unique_id, Log::read_log_dict(&unique_id, path))
-            }
-        }
-    }
-
-    pub fn read_log_dict(unique_id: &String, path: &Path) -> Value {
-        let mut data = String::new();
-        let mut f = File::open(path.join(unique_id)).expect("Unable to open file");
-        f.read_to_string(&mut data).expect("Unable to read string");
-        let data_dict: serde_json::Value =
-            serde_json::from_str(&data).expect("JSON was not well-formatted");
-        data_dict
-    }
-
-    pub fn get_log_from_dict(unique_id: &str, data_dict: Value) -> Result<Log, crate::io::Error> {
-        Ok(Log {
-            current: unique_id.parse::<u64>().unwrap(),
-            previous: data_dict["previous"].to_string().parse::<u64>().unwrap(),
-            value: data_dict["value"].clone(),
-        })
-    }
-}
+use std::slice::ChunksMut;
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
+pub mod errors;
+mod log;
+mod utils;
+use crate::errors::DBError;
+use crate::log::Log;
+use utils::trim_string;
 
 #[derive(Debug)]
 pub struct KvStore {
@@ -130,22 +27,19 @@ impl KvStore {
         if uid.to_string().parse::<u64>().unwrap() > self.max_log {
             Ok(())
         } else {
-            let log_dict = Log::read_log_dict(&uid, &self.path);
-            let command = &log_dict["command"].to_string();
-            let short = &command[1..command.len() - 1];
+            let log_dict = utils::read_log(&self.path, &uid);
+            let command = log_dict["command"].to_string();
+            let short = trim_string(&command);
 
             match short {
                 "set" => {
-                    let key = &log_dict["value"]["key"].to_string();
-                    let key_slice = &key[1..key.len() - 1];
+                    let key = log_dict["kv_pair"]["key"].to_string();
+                    let key_slice = trim_string(&key);
 
-                    // let value: &String = &log_dict["value"]["value"].to_string();
-                    // let value_slice = &value[1..value.len() - 1];
+                    let value = log_dict["kv_pair"]["value"].to_string();
+                    let value_slice = trim_string(&value);
 
                     if key_slice == target {
-                        // let key = &log_dict["value"]["key"].to_string();
-                        // let key_slice = &key[1..key.len() - 1];
-                        // println!("here {}", log_dict["value"]["key"]);
                         self.dict.insert(key_slice.to_string(), uid.clone());
                         // println!("{}", self.dict.get("key1").unwrap());
                         let _ = self.recreate_state_from_log(
@@ -162,8 +56,8 @@ impl KvStore {
                     }
                 }
                 "rm" => {
-                    let key = &log_dict["value"]["key"].to_string();
-                    let key_slice = &key[1..key.len() - 1];
+                    let key = log_dict["kv_pair"]["key"].to_string();
+                    let key_slice = trim_string(&key);
                     self.dict.remove(&key_slice.to_string());
                     let _ = self.recreate_state_from_log(
                         (uid.parse::<u64>().unwrap() + 1).to_string(),
@@ -178,7 +72,7 @@ impl KvStore {
                     );
                     Ok(())
                 }
-                _ => Err(DBError::from_log_read()),
+                _ => Err(errors::DBError::from_log_read()),
             }
         }
     }
@@ -187,23 +81,23 @@ impl KvStore {
         self.log = self.log.load(&self.path).unwrap();
         self.max_log = self.log.current;
         self.recreate_state_from_log("2".to_string(), &key)?;
-        self.log.append(
-            (
-                "get".to_string(),
-                json!(
-                {
-                    "key": key,
-                }),
-            ),
-            &self.path,
-        );
+        // self.log.append(
+        //     (
+        //         "get".to_string(),
+        //         json!(
+        //         {
+        //             "key": key,
+        //         }),
+        //     ),
+        // &self.path,
+        // );
 
         if self.dict.get(&key).map(|s| s.to_string()).is_some() {
             let log_pointer = self.dict.get(&key).map(|s| s.to_string()).unwrap();
-            let log_dict = Log::read_log_dict(&log_pointer, &self.path);
-            let value: &String = &log_dict["value"]["value"].to_string();
-            let value_slice = &value[1..value.len() - 1];
-            println!("{}", value_slice);
+            let log_dict = utils::read_log(&self.path, &log_pointer);
+            let value: String = log_dict["kv_pair"]["value"].to_string();
+            let value_slice = trim_string(&value);
+            println!("{}", value_slice.to_string());
             Ok(Some(value_slice.to_string()))
         } else {
             println!("Key not found");
@@ -213,18 +107,18 @@ impl KvStore {
     pub fn set(&mut self, key: String, value: String) -> Result<Option<String>, DBError> {
         self.log = self.log.load(&self.path).unwrap();
         self.max_log = self.log.current;
-        self.log.append(
-            (
-                "set".to_string(),
-                json!(
-                {
-                    "key": key,
-                    "value": value,
-                }),
-            ),
-            &self.path,
-        );
-        self.dict.insert((key.clone()).to_string(), value);
+        // TODO
+        // replace the "2" with a min log parameter for self
+        // write function that updates min log if its deleted
+        self.recreate_state_from_log("2".to_string(), &key)?;
+        let log_pointer = (self.max_log + 1).to_string();
+        self.dict.insert((key.clone()).to_string(), log_pointer);
+        let kv_pair = json!(
+        {
+            "key": key,
+            "value": value,
+        });
+        self.log.append("set".to_string(), kv_pair, &self.path);
         Ok(Some("".to_string()))
     }
 
@@ -232,21 +126,15 @@ impl KvStore {
         self.log = self.log.load(&self.path).unwrap();
         self.max_log = self.log.current;
         self.recreate_state_from_log("2".to_string(), &key)?;
-        self.log.append(
-            (
-                "rm".to_string(),
-                json!(
-                {
-                    "key": key,
-                }),
-            ),
-            &self.path,
-        );
-
         if self.dict.remove(&(key.clone()).to_string()).is_none() {
             println!("Key not found");
-            Err(DBError::no_key())
+            Err(errors::DBError::no_key())
         } else {
+            let kv_pair = json!(
+            {
+                "key": key,
+            });
+            self.log.append("rm".to_string(), kv_pair, &self.path);
             Ok(Some(key))
         }
     }
@@ -260,5 +148,48 @@ impl KvStore {
             dict: HashMap::new(),
             max_log: 0,
         })
+    }
+
+    pub fn compact_logs(&mut self) -> Result<(), DBError> {
+        //
+        // removed_entries = [];
+        // distinct_keys = [];
+        //
+        // if in
+        let mut removed_or_set_later: HashSet<String> = HashSet::new();
+
+        let mut current_log = self.log.load(&self.path).unwrap();
+
+        while current_log.current > 1 {
+            let mut previous_log = utils::read_log(&*self.path, &current_log.previous.to_string());
+            while removed_or_set_later.contains(&previous_log["key"].to_string())
+                | (previous_log["command"].to_string() == "get")
+            {
+                // change to previous log and delete current
+                current_log.log_dict["previous"] = previous_log["previous"].clone();
+                utils::write_log(
+                    &self.path,
+                    &current_log.current.to_string(),
+                    current_log.log_dict.clone(),
+                );
+                utils::delete_log(&self.path, &current_log.previous.to_string());
+                let mut previous_of_previous =
+                    utils::read_log(&*self.path, &previous_log["previous"].to_string());
+                previous_log = previous_of_previous;
+
+                current_log.previous = previous_log["previous"].as_u64().unwrap();
+            }
+            if (current_log.log_dict["command"].to_string() == "rm")
+                | (current_log.log_dict["command"].to_string() == "get")
+            {
+                removed_or_set_later.insert(current_log.log_dict["key"].to_string());
+            } else {
+                utils::delete_log(&self.path, &current_log.current.to_string());
+            }
+            current_log.log_dict = previous_log.clone();
+            current_log.current = current_log.previous;
+            current_log.previous = previous_log["previous"].as_u64().unwrap();
+        }
+        Ok(())
     }
 }
