@@ -1,12 +1,11 @@
-use crate::errors::{self, DBError};
+use crate::errors::{DBError};
 use crate::utils;
 use serde_json::{self, json, Value};
 use std::fs;
-use std::fs::File;
+
 use std::io;
-use std::io::{Read, Write};
+
 use std::{
-    collections::{HashMap, HashSet},
     path::Path,
 };
 #[derive(Debug)]
@@ -71,7 +70,7 @@ impl Log {
     pub fn load(&self, path: &Path) -> Result<Log, DBError> {
         let unique_id = self
             .find_highest_numbered_file(path)
-            .map_err(|err| DBError::Io(err))?;
+            .map_err(DBError::Io)?;
         match unique_id {
             None => Ok(Log::new()),
             Some(unique_id) => Ok(Log::get_log_from_dict(

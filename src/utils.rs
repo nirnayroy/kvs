@@ -1,10 +1,9 @@
 use crate::errors::DBError;
-use serde_json::{self, json, Value};
+use serde_json::{self, Value};
 use std::fs;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::{
-    collections::{HashMap, HashSet},
     path::Path,
 };
 
@@ -29,7 +28,7 @@ pub fn read_log(filepath: &Path, filename: &String) -> Value {
 }
 
 pub fn delete_log(filepath: &Path, filename: &String) -> Result<(), DBError> {
-    let _ = fs::remove_file(filepath.join(filename)).map_err(|err| DBError::Io);
+    let _ = fs::remove_file(filepath.join(filename)).map_err(|_err| DBError::Io);
     Ok(())
 }
 
