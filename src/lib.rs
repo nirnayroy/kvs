@@ -23,64 +23,95 @@ pub struct KvStore {
 }
 
 impl KvStore {
-    fn recreate_state_from_log(&mut self, uid: String, target: &String) -> Result<(), DBError> {
-        if uid.to_string().parse::<u64>().unwrap() > self.max_log {
-            Ok(())
-        } else {
-            let log_dict = utils::read_log(&self.path, &uid);
-            let command = log_dict["command"].to_string();
-            let short = trim_string(&command);
+    fn recreate_state_from_log(&mut self, uid: String) -> Result<(), DBError> {
+        let mut uid = uid;
+        let mut removed_or_set_later: HashSet<String> = HashSet::new();
+        while uid.to_string().parse::<u64>().unwrap() > 1 {
+            let log_dict = utils::read_log(&self.path, &uid.to_string());
 
-            match short {
-                "set" => {
-                    let key = log_dict["kv_pair"]["key"].to_string();
-                    let key_slice = trim_string(&key);
+            let mut command_raw = log_dict["command"].to_string();
+            let command = trim_string(&mut command_raw);
 
-                    let value = log_dict["kv_pair"]["value"].to_string();
-                    let value_slice = trim_string(&value);
+            let mut key_raw = log_dict["kv_pair"]["key"].to_string();
+            let key = trim_string(&mut key_raw);
 
-                    if key_slice == target {
-                        self.dict.insert(key_slice.to_string(), uid.clone());
-                        // println!("{}", self.dict.get("key1").unwrap());
-                        let _ = self.recreate_state_from_log(
-                            (uid.parse::<u64>().unwrap() + 1).to_string(),
-                            target,
-                        );
-                        Ok(())
-                    } else {
-                        let _ = self.recreate_state_from_log(
-                            (uid.parse::<u64>().unwrap() + 1).to_string(),
-                            target,
-                        );
-                        Ok(())
-                    }
+            if removed_or_set_later.contains(key) {
+                uid = log_dict["previous"].to_string();
+            } else {
+                if (command == String::from("set")) {
+                    self.dict.insert(key.to_string(), (*uid).to_string());
+                    removed_or_set_later.insert(key.to_string());
+                    uid = log_dict["previous"].to_string();
+                } else if (command == String::from("rm")) {
+                    removed_or_set_later.insert(key.to_string());
+                    uid = log_dict["previous"].to_string();
+                } else {
+                    uid = log_dict["previous"].to_string();
                 }
-                "rm" => {
-                    let key = log_dict["kv_pair"]["key"].to_string();
-                    let key_slice = trim_string(&key);
-                    self.dict.remove(&key_slice.to_string());
-                    let _ = self.recreate_state_from_log(
-                        (uid.parse::<u64>().unwrap() + 1).to_string(),
-                        target,
-                    );
-                    Ok(())
-                }
-                "get" => {
-                    let _ = self.recreate_state_from_log(
-                        (uid.parse::<u64>().unwrap() + 1).to_string(),
-                        target,
-                    );
-                    Ok(())
-                }
-                _ => Err(errors::DBError::from_log_read()),
             }
+
+            // if uid.to_string().parse::<u64>().unwrap() < 2 {
+            //     Ok(())
+            // } else {
+            //     let log_dict = utils::read_log(&self.path, &uid);
+
+            //     let mut command = log_dict["command"].to_string();
+            //     let short = trim_string(&mut command);
+
+            //     let mut removed_or_set_later: HashSet<String> = HashSet::new();
+
+            // match short {
+            //     "set" => {
+
+            //         let mut key = log_dict["kv_pair"]["key"].to_string();
+            //         let key_slice = trim_string(&mut key);
+
+            //         let mut value = log_dict["kv_pair"]["value"].to_string();
+            //         let value_slice = trim_string(&mut value);
+
+            //         if key_slice == target {
+            //             self.dict.insert(key_slice.to_string(), uid.clone());
+            //             // println!("{}", self.dict.get("key1").unwrap());
+            //             let _ = self.recreate_state_from_log(
+            //                 (uid.parse::<u64>().unwrap() + 1).to_string(),
+            //                 target,
+            //             );
+            //             Ok(())
+            //         } else {
+            //             let _ = self.recreate_state_from_log(
+            //                 (uid.parse::<u64>().unwrap() + 1).to_string(),
+            //                 target,
+            //             );
+            //             Ok(())
+            //         }
+            //     }
+            //     "rm" => {
+            //         let mut key = log_dict["kv_pair"]["key"].to_string();
+            //         let key_slice = trim_string(&mut key);
+            //         self.dict.remove(&key_slice.to_string());
+            //         let _ = self.recreate_state_from_log(
+            //             (uid.parse::<u64>().unwrap() + 1).to_string(),
+            //             target,
+            //         );
+            //         Ok(())
+            //     }
+            //     "get" => {
+            //         let _ = self.recreate_state_from_log(
+            //             (uid.parse::<u64>().unwrap() + 1).to_string(),
+            //             target,
+            //         );
+            //         Ok(())
+            //     }
+            //     _ => Err(errors::DBError::from_log_read()),
+            // }
         }
+        Ok(())
     }
 
     pub fn get(&mut self, key: String) -> Result<Option<String>, DBError> {
         self.log = self.log.load(&self.path).unwrap();
         self.max_log = self.log.current;
-        self.recreate_state_from_log("2".to_string(), &key)?;
+        self.recreate_state_from_log(self.max_log.to_string())?;
         // self.log.append(
         //     (
         //         "get".to_string(),
@@ -95,8 +126,8 @@ impl KvStore {
         if self.dict.get(&key).map(|s| s.to_string()).is_some() {
             let log_pointer = self.dict.get(&key).map(|s| s.to_string()).unwrap();
             let log_dict = utils::read_log(&self.path, &log_pointer);
-            let value: String = log_dict["kv_pair"]["value"].to_string();
-            let value_slice = trim_string(&value);
+            let mut value: String = log_dict["kv_pair"]["value"].to_string();
+            let value_slice = trim_string(&mut value);
             println!("{}", value_slice.to_string());
             Ok(Some(value_slice.to_string()))
         } else {
@@ -107,10 +138,11 @@ impl KvStore {
     pub fn set(&mut self, key: String, value: String) -> Result<Option<String>, DBError> {
         self.log = self.log.load(&self.path).unwrap();
         self.max_log = self.log.current;
+        // let mut latest_log = self.max_log.to_string();
         // TODO
         // replace the "2" with a min log parameter for self
         // write function that updates min log if its deleted
-        self.recreate_state_from_log("2".to_string(), &key)?;
+        self.recreate_state_from_log(self.log.current.to_string())?;
         let log_pointer = (self.max_log + 1).to_string();
         self.dict.insert((key.clone()).to_string(), log_pointer);
         let kv_pair = json!(
@@ -125,7 +157,7 @@ impl KvStore {
     pub fn remove(&mut self, key: String) -> Result<Option<String>, DBError> {
         self.log = self.log.load(&self.path).unwrap();
         self.max_log = self.log.current;
-        self.recreate_state_from_log("2".to_string(), &key)?;
+        self.recreate_state_from_log(self.log.current.to_string())?;
         if self.dict.remove(&(key.clone()).to_string()).is_none() {
             println!("Key not found");
             Err(errors::DBError::no_key())
@@ -133,6 +165,7 @@ impl KvStore {
             let kv_pair = json!(
             {
                 "key": key,
+
             });
             self.log.append("rm".to_string(), kv_pair, &self.path);
             Ok(Some(key))
@@ -150,46 +183,70 @@ impl KvStore {
         })
     }
 
-    pub fn compact_logs(&mut self) -> Result<(), DBError> {
+    pub fn compact_logs(&mut self, dir: &Path) -> Result<(), DBError> {
         //
         // removed_entries = [];
         // distinct_keys = [];
         //
         // if in
+        println!("compaction triggered");
         let mut removed_or_set_later: HashSet<String> = HashSet::new();
 
-        let mut current_log = self.log.load(&self.path).unwrap();
-
-        while current_log.current > 1 {
+        let current_log = &mut self.log.load(&self.path).unwrap();
+        // println!("{}", utils::count_files_in_dir(dir).map_err(|err| DBError::Io(err))?);
+        // println!("{}", utils::trim_string(&current_log.log_dict["command"].to_string()));
+        // assert!(utils::trim_string(&current_log.log_dict["command"].to_string()) == "set");
+        while current_log.previous > 1 {
             let mut previous_log = utils::read_log(&*self.path, &current_log.previous.to_string());
-            while removed_or_set_later.contains(&previous_log["key"].to_string())
-                | (previous_log["command"].to_string() == "get")
+
+            let mut current_key_raw = current_log.log_dict["kv_pair"]["key"].clone().to_string();
+            let current_key = trim_string(&mut current_key_raw);
+
+            let mut previous_key_raw = previous_log["kv_pair"]["key"].clone().to_string();
+            let mut previous_key = trim_string(&mut previous_key_raw);
+
+            let mut previous_command_raw = previous_log["command"].clone().to_string();
+            let mut previous_command = trim_string(&mut previous_command_raw);
+
+            let mut current_command_raw = current_log.log_dict["command"].clone().to_string();
+            let current_command = trim_string(&mut current_command_raw);
+
+            while removed_or_set_later.contains(previous_key)
+                & (previous_command == "set")
+                & (current_log.previous > 2)
             {
                 // change to previous log and delete current
                 current_log.log_dict["previous"] = previous_log["previous"].clone();
+                let redundant_log = current_log.previous;
+                current_log.previous = previous_log["previous"].as_u64().unwrap();
                 utils::write_log(
                     &self.path,
                     &current_log.current.to_string(),
                     current_log.log_dict.clone(),
-                );
-                utils::delete_log(&self.path, &current_log.previous.to_string());
-                let mut previous_of_previous =
-                    utils::read_log(&*self.path, &previous_log["previous"].to_string());
-                previous_log = previous_of_previous;
+                )?;
+                utils::delete_log(&self.path, &redundant_log.to_string())?;
+                previous_log = utils::read_log(&*self.path, &current_log.previous.to_string());
+                // println!("{}", &previous_log["previous"].to_string());
+                // previous_log = previous_of_previous;
+                // println!("{}", &previous_log["previous"].to_string());
 
-                current_log.previous = previous_log["previous"].as_u64().unwrap();
+                previous_key_raw = previous_log["kv_pair"]["key"].clone().to_string();
+                previous_key = trim_string(&mut previous_key_raw);
+
+                previous_command_raw = previous_log["command"].clone().to_string();
+                previous_command = trim_string(&mut previous_command_raw);
             }
-            if (current_log.log_dict["command"].to_string() == "rm")
-                | (current_log.log_dict["command"].to_string() == "get")
-            {
-                removed_or_set_later.insert(current_log.log_dict["key"].to_string());
+            if (current_command == String::from("rm")) | (current_command == String::from("set")) {
+                removed_or_set_later.insert(current_key.to_string());
             } else {
-                utils::delete_log(&self.path, &current_log.current.to_string());
+                utils::delete_log(&self.path, &current_log.current.to_string())?;
             }
             current_log.log_dict = previous_log.clone();
             current_log.current = current_log.previous;
             current_log.previous = previous_log["previous"].as_u64().unwrap();
         }
+        // println!("{}", utils::count_files_in_dir(dir).map_err(|err| DBError::Io(err))?);
+        println!("compaction completed");
         Ok(())
     }
 }

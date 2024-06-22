@@ -1,14 +1,14 @@
+use crate::errors::{self, DBError};
+use crate::utils;
+use serde_json::{self, json, Value};
 use std::fs;
 use std::fs::File;
-use serde_json::{self, json, Value};
-use  crate::errors::{self, DBError};
+use std::io;
+use std::io::{Read, Write};
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
 };
-use crate::utils;
-use std::io::{Read, Write};
-use std::io;
 #[derive(Debug)]
 pub struct Log {
     pub current: u64,
@@ -69,20 +69,23 @@ impl Log {
         Ok(highest_file_name)
     }
     pub fn load(&self, path: &Path) -> Result<Log, DBError> {
-        let unique_id = self.find_highest_numbered_file(path).map_err(|err| DBError::Io(err))?;
+        let unique_id = self
+            .find_highest_numbered_file(path)
+            .map_err(|err| DBError::Io(err))?;
         match unique_id {
             None => Ok(Log::new()),
-            Some(unique_id) => {
-                Ok(Log::get_log_from_dict(&unique_id, utils::read_log(path, &unique_id)))
-            }
+            Some(unique_id) => Ok(Log::get_log_from_dict(
+                &unique_id,
+                utils::read_log(path, &unique_id),
+            )),
         }
     }
 
-    pub fn get_log_from_dict(unique_id: &str, data_dict: Value) ->Log{
+    pub fn get_log_from_dict(unique_id: &str, data_dict: Value) -> Log {
         Log {
             current: unique_id.parse::<u64>().unwrap(),
             previous: data_dict["previous"].to_string().parse::<u64>().unwrap(),
-            log_dict: data_dict["kv_pair"].clone(),
+            log_dict: data_dict.clone(),
         }
     }
 }

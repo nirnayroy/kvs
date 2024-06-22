@@ -279,7 +279,7 @@ fn compaction() -> Result<(), DBError> {
             let value = format!("{}", iter);
             store.set(key, value)?;
         }
-
+        store.compact_logs(temp_dir.path())?;
         let new_size = dir_size();
         if new_size > current_size {
             current_size = new_size;
