@@ -35,7 +35,7 @@ impl Log {
         self.previous = self.current;
         self.current += 1;
         self.log_dict = self.create_entry(command, kv_pair);
-        utils::write_log(path, &self.current.to_string(), self.log_dict.clone());
+        let _ = utils::write_log(path, &self.current.to_string(), self.log_dict.clone());
     }
 
     fn create_entry(&self, command: String, kv_pair: Value) -> Value {

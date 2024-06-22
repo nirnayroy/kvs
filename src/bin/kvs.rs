@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand};
 use kvs::KvStore;
-use tempfile::TempDir;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -20,7 +19,7 @@ enum Commands {
 }
 
 fn main() {
-    let _temp_dir = TempDir::new().expect("unable to create temporary working directory");
+    // let _temp_dir = TempDir::new().expect("unable to create temporary working directory");
     let mut store = KvStore::open(&std::env::current_dir().unwrap()).unwrap();
     let args = Args::parse();
 

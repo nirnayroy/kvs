@@ -37,18 +37,17 @@ impl KvStore {
 
             if removed_or_set_later.contains(key) {
                 uid = log_dict["previous"].to_string();
+            } else if command == "set" {
+                self.dict.insert(key.to_string(), (*uid).to_string());
+                removed_or_set_later.insert(key.to_string());
+                uid = log_dict["previous"].to_string();
+            } else if command == "rm" {
+                removed_or_set_later.insert(key.to_string());
+                uid = log_dict["previous"].to_string();
             } else {
-                if (command == String::from("set")) {
-                    self.dict.insert(key.to_string(), (*uid).to_string());
-                    removed_or_set_later.insert(key.to_string());
-                    uid = log_dict["previous"].to_string();
-                } else if (command == String::from("rm")) {
-                    removed_or_set_later.insert(key.to_string());
-                    uid = log_dict["previous"].to_string();
-                } else {
-                    uid = log_dict["previous"].to_string();
-                }
+                uid = log_dict["previous"].to_string();
             }
+        
 
             // if uid.to_string().parse::<u64>().unwrap() < 2 {
             //     Ok(())
@@ -128,7 +127,7 @@ impl KvStore {
             let log_dict = utils::read_log(&self.path, &log_pointer);
             let mut value: String = log_dict["kv_pair"]["value"].to_string();
             let value_slice = trim_string(&mut value);
-            println!("{}", value_slice.to_string());
+            println!("{}", value_slice);
             Ok(Some(value_slice.to_string()))
         } else {
             println!("Key not found");
@@ -183,7 +182,7 @@ impl KvStore {
         })
     }
 
-    pub fn compact_logs(&mut self, dir: &Path) -> Result<(), DBError> {
+    pub fn compact_logs(&mut self) -> Result<(), DBError> {
         //
         // removed_entries = [];
         // distinct_keys = [];
@@ -197,7 +196,7 @@ impl KvStore {
         // println!("{}", utils::trim_string(&current_log.log_dict["command"].to_string()));
         // assert!(utils::trim_string(&current_log.log_dict["command"].to_string()) == "set");
         while current_log.previous > 1 {
-            let mut previous_log = utils::read_log(&*self.path, &current_log.previous.to_string());
+            let mut previous_log = utils::read_log(&self.path, &current_log.previous.to_string());
 
             let mut current_key_raw = current_log.log_dict["kv_pair"]["key"].clone().to_string();
             let current_key = trim_string(&mut current_key_raw);
@@ -225,7 +224,7 @@ impl KvStore {
                     current_log.log_dict.clone(),
                 )?;
                 utils::delete_log(&self.path, &redundant_log.to_string())?;
-                previous_log = utils::read_log(&*self.path, &current_log.previous.to_string());
+                previous_log = utils::read_log(&self.path, &current_log.previous.to_string());
                 // println!("{}", &previous_log["previous"].to_string());
                 // previous_log = previous_of_previous;
                 // println!("{}", &previous_log["previous"].to_string());
@@ -236,7 +235,7 @@ impl KvStore {
                 previous_command_raw = previous_log["command"].clone().to_string();
                 previous_command = trim_string(&mut previous_command_raw);
             }
-            if (current_command == String::from("rm")) | (current_command == String::from("set")) {
+            if (current_command == "rm") | (current_command == "set") {
                 removed_or_set_later.insert(current_key.to_string());
             } else {
                 utils::delete_log(&self.path, &current_log.current.to_string())?;
