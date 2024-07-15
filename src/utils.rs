@@ -18,14 +18,22 @@ pub fn write_log(filepath: &Path, filename: &String, data: Value) -> Result<(), 
     Ok(())
 }
 
-pub fn read_log(filepath: &Path, filename: &String) -> Value {
+pub fn read_log(filepath: &Path, filename: &String)-> Result<Value, DBError>{
     let mut data = String::new();
-    let mut f = File::open(filepath.join(filename)).expect("Unable to open file");
-    f.read_to_string(&mut data).expect("Unable to read string");
-    let data_dict: serde_json::Value =
+    let mut f = File::open(filepath.join(filename));
+    if let Ok(mut file) =  f {
+        file.read_to_string(&mut data).map_err(|_err| DBError::Io);
+        let data_dict: serde_json::Value =
         serde_json::from_str(&data).expect("JSON was not well-formatted");
-    data_dict
+        Ok(data_dict)
+    } else {
+        Err(DBError::from_log_read())
+    }  
 }
+ 
+    
+//     Some(data_dict)
+// }
 
 pub fn delete_log(filepath: &Path, filename: &String) -> Result<(), DBError> {
     let _ = fs::remove_file(filepath.join(filename)).map_err(|_err| DBError::Io);
@@ -37,6 +45,5 @@ pub fn count_files_in_dir(dir: &Path) -> io::Result<usize> {
         .filter_map(|entry| entry.ok()) // Filter out any erroneous entries
         .filter(|entry| entry.path().is_file())
         .count();
-
     Ok(count)
 }

@@ -9,21 +9,21 @@ use std::{
     path::Path,
 };
 #[derive(Debug)]
-pub struct Log {
+pub struct log_pointer {
     pub current: u64,
     pub previous: u64,
     pub log_dict: Value,
 }
 
-impl Default for Log {
+impl Default for log_pointer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Log {
-    pub fn new() -> Log {
-        Log {
+impl log_pointer {
+    pub fn new() -> log_pointer {
+        log_pointer {
             current: 1,
             previous: 0,
             log_dict: json!(0),
@@ -67,21 +67,21 @@ impl Log {
 
         Ok(highest_file_name)
     }
-    pub fn load(&self, path: &Path) -> Result<Log, DBError> {
+    pub fn load(&self, path: &Path) -> Result<log_pointer, DBError> {
         let unique_id = self
             .find_highest_numbered_file(path)
             .map_err(DBError::Io)?;
         match unique_id {
-            None => Ok(Log::new()),
-            Some(unique_id) => Ok(Log::get_log_from_dict(
+            None => Ok(log_pointer::new()),
+            Some(unique_id) => Ok(log_pointer::get_log_from_dict(
                 &unique_id,
-                utils::read_log(path, &unique_id),
+                utils::read_log(path, &unique_id)?,
             )),
         }
     }
 
-    pub fn get_log_from_dict(unique_id: &str, data_dict: Value) -> Log {
-        Log {
+    pub fn get_log_from_dict(unique_id: &str, data_dict: Value) -> log_pointer {
+        log_pointer {
             current: unique_id.parse::<u64>().unwrap(),
             previous: data_dict["previous"].to_string().parse::<u64>().unwrap(),
             log_dict: data_dict.clone(),
