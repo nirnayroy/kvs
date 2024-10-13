@@ -7,7 +7,6 @@ use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
 
-
 // `kvs-client` with no args should exit with a non-zero code.
 #[test]
 fn client_cli_no_args() {
@@ -334,5 +333,5 @@ fn cli_access_server_kvs_engine() {
 
 #[test]
 fn cli_access_server_sled_engine() {
-    cli_access_server("sled", "127.0.0.1:4006");
+    cli_access_server("sled", "127.0.0.1:4005");
 }

@@ -1,5 +1,6 @@
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::io::{BufReader, BufWriter, Write};
+use std::os::unix::thread;
 use log::{debug, error, info};
 use crate::errors::DBError;
 use serde_json::de::{Deserializer, IoRead};
@@ -24,6 +25,7 @@ impl<E: KvsEngine> KvsServer<E>{
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
+                    // let handle = thread::spawn();
                     if let Err(e) = self.serve(stream) {
                         error!("Error on serving client");
                     }

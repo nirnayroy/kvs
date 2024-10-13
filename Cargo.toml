@@ -12,6 +12,8 @@ predicates = "3.0.0"
 rand = "0.8.5"
 tempfile = "3.0.7"
 walkdir = "2.2.7"
+crossbeam-utils = "0.8.20"
+panic-control = "0.1.4"
 
 [dependencies]
 clap = {version = "4.5.4" , features = ["derive"] }
