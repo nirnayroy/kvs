@@ -19,7 +19,7 @@ pub struct SledKvsEngine{
 
 impl SledKvsEngine {
     /// Creates a `SledKvsEngine` from `sled::Db`.
-    pub fn open(db: Db, path: &Path) -> Self {
+    pub fn open(path: &Path) -> Result<SledKvsEngine, DBError> {
         let config = json!(
             {
                 "engine_name": "sled",
@@ -29,8 +29,8 @@ impl SledKvsEngine {
             &"config".to_string(),
             config,
         ).unwrap();
-        // db = Db::open_tree(&self, "sled tree");
-        SledKvsEngine{path : path.into(), tree: db.open_tree("sled_tree").unwrap()}
+        let db: sled::Db = sled::open(path).unwrap();
+        Ok(SledKvsEngine{path : path.into(), tree: db.open_tree("sled_tree").unwrap()})
     }
 }
 

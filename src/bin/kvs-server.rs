@@ -10,7 +10,7 @@ use sled;
 // use tokio::net::TcpListener;
 // use tokio::prelude::*;
 static DEFAULT_IP: &str="127.0.0.1:4000";
-static DEFAULT_ENGINE: &str="kvs";
+static DEFAULT_ENGINE: &str="sled";
 
 // , default_value_t=DEFAULT_IP.parse().unwrap()
 
@@ -53,7 +53,7 @@ fn main(){
             };
             let _ = match engine_type.unwrap() {
                 Engine::KvStore => run_with_engine(KvStore::open(path).unwrap(), args.addr),
-                Engine::SledKvsEngine => run_with_engine(SledKvsEngine::open(sled::open(path).unwrap(), path), args.addr),
+                Engine::SledKvsEngine => run_with_engine(SledKvsEngine::open(path).unwrap(), args.addr),
             };
         // Ok(())
         }
@@ -74,7 +74,7 @@ fn main(){
         };
         let _ = match engine_type.unwrap() {
             Engine::KvStore => run_with_engine(KvStore::open(path).unwrap(), args.addr),
-            Engine::SledKvsEngine => run_with_engine(SledKvsEngine::open(sled::open(path).unwrap(), path), args.addr),
+            Engine::SledKvsEngine => run_with_engine(SledKvsEngine::open(path).unwrap(), args.addr),
         };       
         // engine.run(args.addr);
         // Ok(())

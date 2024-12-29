@@ -17,6 +17,8 @@ pub trait KvsEngine {
     ///
     /// It returns `KvsError::KeyNotFound` if the given key is not found.
     fn remove(&mut self, key: String) -> Result<Option<String>, DBError> ;
+
+    // fn clone(&mut self, key: String) -> Result<Option<String>, DBError> ;
 }
 
 pub mod kvs;
