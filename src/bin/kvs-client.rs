@@ -1,68 +1,95 @@
-use clap::{Parser, Subcommand};
-use kvs::engine::{KvsEngine, KvStore};
-// use kvs::KvStore;
-use kvs::client::KvsClient;
-use std::net::{SocketAddr, ToSocketAddrs};
+use clap::AppSettings;
+use kvs::{KvsClient, Result};
+use std::net::SocketAddr;
 use std::process::exit;
+use structopt::StructOpt;
+use tokio::prelude::*;
 
-static DEFAULT_IP: &str="127.0.0.1:4000";
-// static : SocketAddr = string_ip.parse().unwrap();
-
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    #[command(subcommand)]
-    cmd: Commands,
-    
+#[derive(StructOpt, Debug)]
+#[structopt(
+    name = "kvs-client",
+    raw(global_settings = "&[\
+                           AppSettings::DisableHelpSubcommand,\
+                           AppSettings::VersionlessSubcommands]")
+)]
+struct Opt {
+    #[structopt(subcommand)]
+    command: Command,
 }
 
-#[derive(Subcommand, Debug, Clone)]
-enum Commands {
-    #[command(about = "get value")]
-    Get { 
-        key: String, 
-        #[arg(long, short, default_value_t=DEFAULT_IP.parse().unwrap())]
-        addr: SocketAddr, 
+#[derive(StructOpt, Debug)]
+enum Command {
+    #[structopt(name = "get", about = "Get the string value of a given string key")]
+    Get {
+        #[structopt(name = "KEY", help = "A string key")]
+        key: String,
+        #[structopt(
+            long,
+            help = "Sets the server address",
+            value_name = "IP:PORT",
+            default_value = "127.0.0.1:4000",
+            parse(try_from_str)
+        )]
+        addr: SocketAddr,
     },
-    #[command(about = "set value")]
-    Set { 
-        key: String, value: String, 
-        #[arg(long, short, default_value_t=DEFAULT_IP.parse().unwrap())]
-        addr: SocketAddr, 
+    #[structopt(name = "set", about = "Set the value of a string key to a string")]
+    Set {
+        #[structopt(name = "KEY", help = "A string key")]
+        key: String,
+        #[structopt(name = "VALUE", help = "The string value of the key")]
+        value: String,
+        #[structopt(
+            long,
+            help = "Sets the server address",
+            value_name = "IP:PORT",
+            default_value = "127.0.0.1:4000",
+            parse(try_from_str)
+        )]
+        addr: SocketAddr,
     },
-    #[command(about = "remove value")]
-    Rm { 
-        key: String, 
-        #[arg(long, short, default_value_t=DEFAULT_IP.parse().unwrap())]
-        addr: SocketAddr, 
+    #[structopt(name = "rm", about = "Remove a given string key")]
+    Remove {
+        #[structopt(name = "KEY", help = "A string key")]
+        key: String,
+        #[structopt(
+            long,
+            help = "Sets the server address",
+            value_name = "IP:PORT",
+            default_value = "127.0.0.1:4000",
+            parse(try_from_str)
+        )]
+        addr: SocketAddr,
     },
 }
 
 fn main() {
-    // let _temp_dir = TempDir::new().expect("unable to create temporary working directory");
-    // let mut store = KvStore::open(&std::env::current_dir().unwrap()).unwrap();
-    let args = Args::parse();
-    let _ = match args.cmd {
-        Commands::Get { key, addr} => {
-            let mut client = KvsClient::connect(addr).unwrap();
-            if let Some(value) = client.get(key).unwrap() {
+    let opt = Opt::from_args();
+    if let Err(e) = run(opt) {
+        eprintln!("{}", e);
+        exit(1);
+    }
+}
+
+fn run(opt: Opt) -> Result<()> {
+    match opt.command {
+        Command::Get { key, addr } => {
+            let client = KvsClient::connect(addr);
+            if let (Some(value), _) = client.and_then(move |client| client.get(key)).wait()? {
                 println!("{}", value);
             } else {
                 println!("Key not found");
             }
         }
-        Commands::Set { key, value, addr} => {
-            let mut client = KvsClient::connect(addr).unwrap();
-            client.set(key, value).unwrap();
+        Command::Set { key, value, addr } => {
+            let client = KvsClient::connect(addr);
+            client
+                .and_then(move |client| client.set(key, value))
+                .wait()?;
         }
-        Commands::Rm { key, addr} => {
-            let mut client = KvsClient::connect(addr).unwrap();
-            if let Err(_) = client.remove(key) {
-                eprintln!("Key not found");
-                exit(1)
-            } else {
-                ()
-            }
+        Command::Remove { key, addr } => {
+            let client = KvsClient::connect(addr);
+            client.and_then(move |client| client.remove(key)).wait()?;
         }
-    };
+    }
+    Ok(())
 }

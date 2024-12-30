@@ -1,8 +1,17 @@
-pub mod engine;
-pub mod server;
-pub mod errors;
-pub mod log_pointer;
-pub mod utils;
-pub mod protocol;
-pub mod client;
+#![deny(missing_docs)]
+//! A simple key/value store.
+
+#[macro_use]
+extern crate log;
+
+pub use client::KvsClient;
+pub use engines::{KvStore, KvsEngine, SledKvsEngine};
+pub use error::{KvsError, Result};
+pub use server::KvsServer;
+
+mod client;
+mod common;
+mod engines;
+mod error;
+mod server;
 pub mod thread_pool;

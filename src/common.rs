@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
     Get { key: String },
@@ -7,19 +8,9 @@ pub enum Request {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum GetResponse {
-    Ok(Option<String>),
-    Err(String),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum SetResponse {
-    Ok(()),
-    Err(String),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum RemoveResponse {
-    Ok(()),
+pub enum Response {
+    Get(Option<String>),
+    Set,
+    Remove,
     Err(String),
 }
