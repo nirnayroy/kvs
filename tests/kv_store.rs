@@ -1,6 +1,6 @@
 use kvs::engine::{SledKvsEngine, KvsEngine};
 use kvs::errors::DBError;
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use tempfile::TempDir;
 use walkdir::WalkDir;
@@ -84,129 +84,127 @@ fn remove_key() -> Result<(), DBError> {
 
 // Insert data until total size of the directory decreases.
 // Test data correctness after compaction.
-// #[test]
-// fn compaction() -> Result<(), DBError> {
-//     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//     let mut store = SledKvsEngine::open(temp_dir.path())?;
+#[test]
+fn compaction() -> Result<(), DBError> {
+    let temp_dir = TempDir::new().expect("unable to create temporary working directory");
+    let mut store = SledKvsEngine::open(temp_dir.path())?;
 
-//     let dir_size = || {
-//         let entries = WalkDir::new(temp_dir.path()).into_iter();
-//         let len: walkdir::Result<u64> = entries
-//             .map(|res| {
-//                 res.and_then(|entry| entry.metadata())
-//                     .map(|metadata| metadata.len())
-//             })
-//             .sum();
-//         len.expect("fail to get directory size")
-//     };
+    let dir_size = || {
+        let entries = WalkDir::new(temp_dir.path()).into_iter();
+        let len: walkdir::Result<u64> = entries
+            .map(|res| {
+                res.and_then(|entry| entry.metadata())
+                    .map(|metadata| metadata.len())
+            })
+            .sum();
+        len.expect("fail to get directory size")
+    };
 
-//     let mut current_size = dir_size();
-//     for iter in 0..1000 {
-//         for key_id in 0..1000 {
-//             let key = format!("key{}", key_id);
-//             let value = format!("{}", iter);
-//             store.set(key, value)?;
-//         }
-//         store.compact_logs()?;
-//         let new_size = dir_size();
-//         if new_size > current_size {
-//             current_size = new_size;
-//             continue;
-//         }
-//         // Compaction triggered
+    let mut current_size = dir_size();
+    for iter in 0..1000 {
+        for key_id in 0..1000 {
+            let key = format!("key{}", key_id);
+            let value = format!("{}", iter);
+            store.set(key, value)?;
+        }
+        // store.compact_logs()?;
+        let new_size = dir_size();
+        if new_size > current_size {
+            current_size = new_size;
+            continue;
+        }
+        // Compaction triggered
 
-//         drop(store);
-//         // reopen and check content
-//         let mut store = SledKvsEngine::open(temp_dir.path())?;
-//         for key_id in 0..1000 {
-//             let key = format!("key{}", key_id);
-//             assert_eq!(store.get(key)?, Some(format!("{}", iter)));
-//         }
-//         return Ok(());
-//     }
+        drop(store);
+        // reopen and check content
+        let mut store = SledKvsEngine::open(temp_dir.path())?;
+        for key_id in 0..1000 {
+            let key = format!("key{}", key_id);
+            assert_eq!(store.get(key)?, Some(format!("{}", iter)));
+        }
+        return Ok(());
+    }
 
-//     panic!("No compaction detected");
-// }
+    panic!("No compaction detected");
+}
 
-// #[test]
-// fn concurrent_set() -> Result<(), DBError> {
-//     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//     let store = SledKvsEngine::open(temp_dir.path())?;
-//     let barrier = Arc::new(Barrier::new(1001));
-//     for i in 0..1000 {
-//         let store = store.clone();
-//         let barrier = barrier.clone();
-//         thread::spawn(move || {
-//             store
-//                 .set(format!("key{}", i), format!("value{}", i))
-//                 .unwrap();
-//             barrier.wait();
-//         });
-//     }
-//     barrier.wait();
+#[test]
+fn concurrent_set() -> Result<(), DBError> {
+    let temp_dir = TempDir::new().expect("unable to create temporary working directory");
+    let store = Arc::new(Mutex::new(SledKvsEngine::open(temp_dir.path())?));
+    let barrier = Arc::new(Barrier::new(1001));
+    for i in 0..1000 {
+        let store = store.clone();
+        let barrier = barrier.clone();
+        thread::spawn(move || {
+             store.lock().unwrap().set(format!("key{}", i), format!("value{}", i)).unwrap();
+            barrier.wait();
+        });
+    }
+    barrier.wait();
 
-//     for i in 0..1000 {
-//         assert_eq!(store.get(format!("key{}", i))?, Some(format!("value{}", i)));
-//     }
+    for i in 0..1000 {
+        assert_eq!(store.lock().unwrap().get(format!("key{}", i))?, Some(format!("value{}", i)));
+    }
 
-//     // Open from disk again and check persistent data
-//     drop(store);
-//     let store = SledKvsEngine::open(temp_dir.path())?;
-//     for i in 0..1000 {
-//         assert_eq!(store.get(format!("key{}", i))?, Some(format!("value{}", i)));
-//     }
+    // Open from disk again and check persistent data
+    drop(store);
+    let mut store = SledKvsEngine::open(temp_dir.path())?;
+    for i in 0..1000 {
+        assert_eq!(store.get(format!("key{}", i))?, Some(format!("value{}", i)));
+    }
 
-//     Ok(())
-// }
+    Ok(())
+}
 
-// #[test]
-// fn concurrent_get() -> Result<(), DBError> {
-//     let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//     let store = SledKvsEngine::open(temp_dir.path())?;
-//     for i in 0..100 {
-//         store
-//             .set(format!("key{}", i), format!("value{}", i))
-//             .unwrap();
-//     }
+#[test]
+fn concurrent_get() -> Result<(), DBError> {
+    let temp_dir = TempDir::new().expect("unable to create temporary working directory");
+    let store = Arc::new(Mutex::new(SledKvsEngine::open(temp_dir.path())?));
+    for i in 0..100 {
+        store
+            .lock().unwrap().set(format!("key{}", i), format!("value{}", i))
+            .unwrap();
+    }
 
-//     let mut handles = Vec::new();
-//     for thread_id in 0..100 {
-//         let store = store.clone();
-//         let handle = thread::spawn(move || {
-//             for i in 0..100 {
-//                 let key_id = (i + thread_id) % 100;
-//                 assert_eq!(
-//                     store.get(format!("key{}", key_id)).unwrap(),
-//                     Some(format!("value{}", key_id))
-//                 );
-//             }
-//         });
-//         handles.push(handle);
-//     }
-//     for handle in handles {
-//         handle.join().unwrap();
-//     }
+    let mut handles = Vec::new();
+    for thread_id in 0..100 {
+        let store = store.clone();
+        let handle = thread::spawn(move || {
+            for i in 0..100 {
+                let key_id = (i + thread_id) % 100;
+                assert_eq!(
+                    store.lock().unwrap().get(format!("key{}", key_id)).unwrap(),
+                    Some(format!("value{}", key_id))
+                );
+            }
+        });
+        handles.push(handle);
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
 
-//     // Open from disk again and check persistent data
-//     drop(store);
-//     let store = SledKvsEngine::open(temp_dir.path())?;
-//     let mut handles = Vec::new();
-//     for thread_id in 0..100 {
-//         let store = store.clone();
-//         let handle = thread::spawn(move || {
-//             for i in 0..100 {
-//                 let key_id = (i + thread_id) % 100;
-//                 assert_eq!(
-//                     store.get(format!("key{}", key_id)).unwrap(),
-//                     Some(format!("value{}", key_id))
-//                 );
-//             }
-//         });
-//         handles.push(handle);
-//     }
-//     for handle in handles {
-//         handle.join().unwrap();
-//     }
+    // Open from disk again and check persistent data
+    drop(store);
+    let store = Arc::new(Mutex::new(SledKvsEngine::open(temp_dir.path())?));
+    let mut handles = Vec::new();
+    for thread_id in 0..100 {
+        let store = store.clone();
+        let handle = thread::spawn(move || {
+            for i in 0..100 {
+                let key_id = (i + thread_id) % 100;
+                assert_eq!(
+                    store.lock().unwrap().get(format!("key{}", key_id)).unwrap(),
+                    Some(format!("value{}", key_id))
+                );
+            }
+        });
+        handles.push(handle);
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
 
-//     Ok(())
-// }
+    Ok(())
+}

@@ -10,7 +10,7 @@ use sled;
 // use tokio::net::TcpListener;
 // use tokio::prelude::*;
 static DEFAULT_IP: &str="127.0.0.1:4000";
-static DEFAULT_ENGINE: &str="sled";
+static DEFAULT_ENGINE: &str="kvs";
 
 // , default_value_t=DEFAULT_IP.parse().unwrap()
 
